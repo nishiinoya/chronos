@@ -63,6 +63,7 @@ export default function CalendarMonth({ cursor, events, calendars, onDayClick, o
                             {todaysEvents.map((evt) => (
                                 <EventPill
                                     key={`${evt.id}-${key}`}
+                                    type={evt.type}
                                     title={evt.title}
                                     color={calById[evt.calendarId]?.color || '#6c6cff'}
                                     time={

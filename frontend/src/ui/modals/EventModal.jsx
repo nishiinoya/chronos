@@ -1,3 +1,4 @@
+// frontend/src/ui/modals/EventModal.jsx
 import { useEffect, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { api } from '../../api/client.js';
@@ -14,7 +15,8 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
                 end: toLocalInput(event.end ?? event.start),
                 calendarId: event.calendarId,
                 location: event.location || '',
-                description: event.description || ''
+                description: event.description || '',
+                type: event.type || 'task',
             };
         }
 
@@ -24,21 +26,16 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
         // choose default calendar for NEW event
         let defaultCalendarId = '';
 
-        // 1) currently active calendar, if it’s not a system one
         if (activeCalendarId) 
         {
             const active = calendars.find(c => c.id === activeCalendarId && !c.isSystem);
             if (active) defaultCalendarId = active.id;
         }
-
-        // 2) fallback: first non-system calendar
         if (!defaultCalendarId) 
         {
             const nonSystem = calendars.find(c => !c.isSystem);
             if (nonSystem) defaultCalendarId = nonSystem.id;
         }
-
-        // 3) fallback: just first calendar
         if (!defaultCalendarId) 
         {
             defaultCalendarId = calendars[0]?.id || '';
@@ -51,21 +48,18 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
             calendarId: defaultCalendarId,
             location: '',
             description: '',
+            type: 'task',
         };
     });
 
-
     const [busy, setBusy] = useState(false);
 
-    // figure out the currently selected calendar + my role on it
     const currentCalendar = useMemo(
         () => calendars.find(c => c.id === form.calendarId),
         [calendars, form.calendarId]
     );
     const currentRole = currentCalendar?.myRole || null;
-    console.log("EventModal currentRole:", currentRole);
 
-    // who can edit events? owner/admin/editor (backend requires admin/editor; owner is implicit)
     const canEdit = useMemo(() => 
     {
         if (!currentRole) return true; // fallback for old data
@@ -76,8 +70,7 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
         );
     }, [currentRole]);
 
-    // disable Save completely if we can't edit or required fields missing
-    const canSave = canEdit && form.title && form.start && form.end && form.calendarId;
+    const canSave = canEdit && form.title && form.start && form.calendarId;
 
     useEffect(() => 
     {
@@ -89,15 +82,28 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
         return () => window.removeEventListener('keydown', h);
     }, [onClose]);
 
+    // ensure end matches start for non-arrangement types
+    useEffect(() => 
+    {
+        if (form.type === 'arrangement') return;
+        // for reminder and task we keep end equal to start for consistency
+        if (form.start && form.end !== form.start) 
+        {
+            setForm(prev => ({ ...prev, end: prev.start }));
+        }
+    }, [form.type, form.start, form.end]);
+
     async function save() 
     {
         if (!canSave) return;
         setBusy(true);
+
         const payload = {
             ...form,
             start: new Date(form.start).toISOString(),
-            end: new Date(form.end).toISOString(),
+            end: new Date(form.end || form.start).toISOString(),
         };
+
         try 
         {
             if (event) await api.updateEvent(event.id, payload);
@@ -135,7 +141,6 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
         }
     }
 
-    // editable calendars in the dropdown (owner/admin/editor only, non-system)
     const writableCalendars = useMemo(
         () => calendars.filter(c =>
             !c.isSystem &&
@@ -143,6 +148,10 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
         ),
         [calendars]
     );
+
+    const isArrangement = form.type === 'arrangement';
+    const isReminder = form.type === 'reminder';
+    const isTask = form.type === 'task';
 
     return createPortal(
         <div
@@ -174,9 +183,28 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
                     />
                 </label>
 
+                <label className="fld">
+                    <span>Type</span>
+                    <select
+                        value={form.type}
+                        onChange={(e)=>setForm({...form, type:e.target.value})}
+                        disabled={!canEdit || !!event} // lock type on existing events
+                    >
+                        <option value="task">Task</option>
+                        <option value="arrangement">Arrangement</option>
+                        <option value="reminder">Reminder</option>
+                    </select>
+                </label>
+
                 <div className="row" style={{ display: 'flex', gap: 8 }}>
                     <label className="fld" style={{ flex: 1 }}>
-                        <span>Start</span>
+                        <span>
+                            {isArrangement
+                                ? 'Start'
+                                : isReminder
+                                    ? 'Remind at'
+                                    : 'Due date & time'}
+                        </span>
                         <input
                             type="datetime-local"
                             value={form.start}
@@ -185,12 +213,14 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
                         />
                     </label>
                     <label className="fld" style={{ flex: 1 }}>
-                        <span>End</span>
+                        <span>
+                            {isArrangement ? 'End' : 'End (same as start)'}
+                        </span>
                         <input
                             type="datetime-local"
                             value={form.end}
                             onChange={(e)=>setForm({...form, end:e.target.value})}
-                            disabled={!canEdit}
+                            disabled={!canEdit || !isArrangement}
                         />
                     </label>
                 </div>
@@ -236,7 +266,7 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
                     <button className="btn ghost" onClick={onClose}>
                         {canEdit ? 'Cancel' : 'Close'}
                     </button>
-                    {(!event || event) && canEdit && (
+                    {canEdit && (
                         <button
                             className="btn"
                             onClick={save}
@@ -254,7 +284,6 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
 
 function toLocalInput(v) 
 {
-    // handle Date or ISO
     const d = v instanceof Date ? v : new Date(v);
     return formatLocal(d);
 }

@@ -4,32 +4,60 @@ import toJSON from './plugins/toJSON.js';
 
 const eventSchema = new mongoose.Schema(
     {
-        title: { type: String, required: true, trim: true },
-        start: { type: Date, required: true, index: true },
-        end:   { type: Date, required: true, index: true },
+        title: { type: String, required: true },
+
+        // base time fields (always stored so the calendar can render them)
+        start: { type: Date, required: true },
+        end:   { type: Date, required: true },
+
         allDay: { type: Boolean, default: false },
 
-        calendarId: { type: mongoose.Schema.Types.ObjectId, ref: 'Calendar', required: true, index: true },
-        owner:      { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-
-        location: { type: String, trim: true },
-        description: { type: String, trim: true },
-
-        // optional extras
-        recurrence: {
-            freq: { type: String, enum: ['DAILY','WEEKLY','MONTHLY','YEARLY'], default: undefined },
-            interval: { type: Number },
-            byweekday: [{ type: Number }], // 0..6
+        calendarId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Calendar',
+            required: true,
+            index: true,
         },
+
+        owner: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+            index: true,
+        },
+
+        // category of the event
+        type: {
+            type: String,
+            enum: ['arrangement', 'reminder', 'task'],
+            default: 'task',
+        },
+
+        // type-specific fields:
+
+        // for reminders: exact moment when reminder should fire
+        reminderAt: {
+            type: Date,
+        },
+
+        // for tasks: due date/time
+        dueDate: {
+            type: Date,
+        },
+
+        // you can extend later with completed, priority, etc.
+        // completed: { type: Boolean, default: false },
+
+        location: { type: String, default: '' },
+        description: { type: String, default: '' },
     },
     { timestamps: true }
 );
 
 eventSchema.plugin(toJSON);
 
-// Practical indexes for range queries and calendar filters
+// index to find events by calendar + time range
 eventSchema.index({ calendarId: 1, start: 1 });
-eventSchema.index({ owner: 1, start: 1 });
 
 const Event = mongoose.model('Event', eventSchema);
 export default Event;
