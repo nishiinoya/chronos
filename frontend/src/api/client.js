@@ -64,4 +64,22 @@ export const api = {
     createEvent: (data) => request('/events', { method: 'POST', body: data }),
     updateEvent: (id, data) => request(`/events/${id}`, { method: 'PUT', body: data }),
     deleteEvent: (id) => request(`/events/${id}`, { method: 'DELETE' }),
+
+    // calendar members & invites
+    getCalendarMembers: (calendarId) =>
+        request(`/calendars/${calendarId}/members`),
+    inviteCalendarMember: (calendarId, data) =>
+        request(`/calendars/${calendarId}/members`, { method: 'POST', body: data }),
+    updateCalendarMember: (calendarId, userId, data) =>
+        request(`/calendars/${calendarId}/members/${userId}`, { method: 'PATCH', body: data }),
+    removeCalendarMember: (calendarId, userId) =>
+        request(`/calendars/${calendarId}/members/${userId}`, { method: 'DELETE' }),
+    getCalendarInvites: (calendarId) =>
+        request(`/calendars/${calendarId}/invites`),
+    cancelCalendarInvite: (inviteId) =>
+        request(`/calendars/invites/${inviteId}`, { method: 'DELETE' }),
+    
+    // invite accept
+    acceptCalendarInvite: (token) =>
+        request(`/calendars/invites/${token}/accept`, { method: 'POST' }),
 };

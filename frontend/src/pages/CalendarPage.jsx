@@ -10,7 +10,7 @@ import SidebarCalendars from '../ui/SidebarCalendars.jsx';
 import CalendarMonth from '../ui/CalendarMonth.jsx';
 import CalendarWeek from '../ui/CalendarWeek.jsx';
 import CalendarDay from '../ui/CalendarDay.jsx';
-import EventModal from '../ui/EventModal.jsx';
+import EventModal from '../ui/modals/EventModal.jsx';
 
 import useCalendars from '../state/useCalendars.js';
 import useEvents from '../state/useEvents.js';
@@ -24,6 +24,8 @@ export default function CalendarPage()
     const [view, setView] = useState('month');
     const [selectedDay, setSelectedDay] = useState(null);
     const [editingEvent, setEditingEvent] = useState(null);
+    const [showHolidays, setShowHolidays] = useState(true);
+
 
     const range = useMemo(() =>
     {
@@ -37,24 +39,19 @@ export default function CalendarPage()
         return { start: startOfMonth(cursor), end: endOfMonth(cursor) };
     }, [cursor, view]);
 
-    const { calendars, activeIds, toggleCalendar, createCalendar, updateCalendar, deleteCalendar } = useCalendars();
+    const { calendars, activeId, selectCalendar, createCalendar, updateCalendar, deleteCalendar } = useCalendars();
 
     // Holidays calendar & events (system)
     const { calendar: holidaysCal, events: holidayEvents } = useHolidays();
 
-    // IMPORTANT: Do NOT send system calendars to your backend
-    const nonSystemActiveIds = useMemo(() => 
-    {
-        // If you add more system calendars later, extend this filter accordingly.
-        return activeIds.filter(id => id !== holidaysCal.id);
-    }, [activeIds, holidaysCal.id]);
 
-    // Load only your normal events from backend
     const { events: backendEvents, refresh } = useEvents({
         start: range.start.toISOString(),
         end: range.end.toISOString(),
-        calendarIds: nonSystemActiveIds, // ← filtered!
+        calendarIds: activeId ? [activeId] : [],
     });
+
+
 
     // Filter holiday events to current visible range (their start/end are YYYY-MM-DD all-day)
     const holidayEventsInRange = useMemo(() => 
@@ -66,29 +63,27 @@ export default function CalendarPage()
         });
     }, [holidayEvents, range.start, range.end]);
 
-    // If Holidays calendar is toggled on, merge its events (local only)
-    // Also: if nothing is selected at all, show nothing.
     const events = useMemo(() => 
     {
-        const includeHolidays = activeIds.includes(holidaysCal.id);
-        const nonSystemActiveIds = activeIds.filter(id => id !== holidaysCal.id);
+    // filter holiday events by visible range
+        const holidayEventsInRange = holidayEvents.filter(h => 
+        {
+            const d = parseISO(h.start); // YYYY-MM-DD -> Date at 00:00
+            return isWithinInterval(d, {
+                start: startOfDay(range.start),
+                end: endOfDay(range.end),
+            });
+        });
 
-        // If nothing is selected (no system, no normal), return empty list
-        if (!includeHolidays && nonSystemActiveIds.length === 0) return [];
+        const base = activeId ? backendEvents : [];
+        if (!showHolidays) return base;
 
-        // Only include backend events if any non-system calendars are active
-        const base = nonSystemActiveIds.length ? backendEvents : [];
-
-        // Filter holidays by visible range (as you already did earlier)
-        const merged = includeHolidays
-            ? [...base, ...holidayEventsInRange]
-            : base;
-
-        // Dedupe just in case
+        const merged = [...base, ...holidayEventsInRange];
         const map = new Map();
         merged.forEach(e => e?.id && map.set(e.id, e));
         return Array.from(map.values());
-    }, [backendEvents, holidayEventsInRange, activeIds, holidaysCal.id]);
+    }, [backendEvents, holidayEvents, range.start, range.end, activeId, showHolidays]);
+
 
 
     // Merge calendars so UI knows Holidays exists (color, label, etc.)
@@ -119,13 +114,16 @@ export default function CalendarPage()
     return (
         <div className="layout">
             <SidebarCalendars
-                calendars={mergedCalendars}
-                activeIds={activeIds}
-                onToggle={toggleCalendar}
+                calendars={calendars}              // only real calendars; Sidebar adds holidays itself
+                activeCalendarId={activeId}
+                onSelectCalendar={selectCalendar}
+                showHolidays={showHolidays}
+                onToggleHolidays={setShowHolidays}
                 onCreate={createCalendar}
                 onUpdate={updateCalendar}
                 onDelete={deleteCalendar}
             />
+
 
             <main className="main">
                 <CalendarHeader
@@ -195,6 +193,7 @@ export default function CalendarPage()
                     date={selectedDay}
                     event={editingEvent}
                     calendars={mergedCalendars}
+                    activeCalendarId={activeId} 
                     onClose={() => 
                     {
                         setSelectedDay(null); setEditingEvent(null); 

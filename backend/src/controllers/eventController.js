@@ -2,6 +2,7 @@
 import { isValid, parseISO } from 'date-fns';
 import Event from '../models/Event.js';
 import Calendar from '../models/Calendar.js';
+import { requireCalendarRole } from '../utils/calendarAccess.js';
 
 function toDate(val) 
 {
@@ -10,130 +11,174 @@ function toDate(val)
     return isValid(d) ? d : null;
 }
 
-function ensureOwnedCalendar(userId, calendarId) 
-{
-    return Calendar.exists({ _id: calendarId, owner: userId });
-}
-
-// GET /events?start=ISO&end=ISO&calendarId=...&calendarId=...
+// GET /events?start=...&end=...&calendarId=...&calendarId=...
 export async function getEvents(req, res) 
 {
+    const userId = req.user.id;
     const { start, end } = req.query;
-    let calendarIds = req.query.calendarId;
-    if (calendarIds == null) 
+
+    const startDate = toDate(start);
+    const endDate = toDate(end);
+
+    // find all calendars accessible to this user
+    const accessibleCalendars = await Calendar.find({
+        $or: [
+            { owner: userId },
+            { 'members.user': userId },
+        ],
+    }).select('_id');
+
+    if (!accessibleCalendars.length) 
     {
-    // if not provided, default to all user's calendars
-        const cals = await Calendar.find({ owner: req.user.id }).select('_id').lean();
-        calendarIds = cals.map(c => String(c._id));
-    }
-    else if (!Array.isArray(calendarIds)) 
-    {
-        calendarIds = [calendarIds];
+        return res.json([]);
     }
 
-    const startAt = toDate(start);
-    const endAt = toDate(end);
-    if (!startAt || !endAt) 
+    let requestedIds = req.query.calendarId;
+    if (requestedIds && !Array.isArray(requestedIds)) 
     {
-        return res.status(400).json({ error: 'start and end (ISO) are required' });
+        requestedIds = [requestedIds];
     }
 
-    // Filter by user ownership AND the requested calendars
-    const rows = await Event.find({
-        owner: req.user.id,
+    let calendarIds;
+    if (requestedIds && requestedIds.length) 
+    {
+        const set = new Set(requestedIds.map(String));
+        calendarIds = accessibleCalendars
+            .filter((c) => set.has(String(c._id)))
+            .map((c) => c._id);
+    }
+    else 
+    {
+        calendarIds = accessibleCalendars.map((c) => c._id);
+    }
+
+    if (!calendarIds.length) 
+    {
+        return res.json([]);
+    }
+
+    const filter = {
         calendarId: { $in: calendarIds },
-        // overlap where event.start < end && event.end > start
-        start: { $lt: endAt },
-        end:   { $gt: startAt },
-    })
-        .sort({ start: 1 });
+    };
 
-    return res.json(rows);
+    if (startDate && endDate) 
+    {
+        // events overlapping [start, end]
+        filter.start = { $lt: endDate };
+        filter.end = { $gt: startDate };
+    }
+    else if (startDate) 
+    {
+        filter.end = { $gt: startDate };
+    }
+    else if (endDate) 
+    {
+        filter.start = { $lt: endDate };
+    }
+
+    const events = await Event.find(filter).sort({ start: 1 });
+    return res.json(events);
 }
 
 // POST /events
 export async function createEvent(req, res) 
 {
+    const userId = req.user.id;
     const {
-        title, start, end, allDay = false,
-        calendarId, location, description, recurrence
+        title,
+        start,
+        end,
+        allDay,
+        calendarId,
+        location,
+        description,
     } = req.body || {};
 
     if (!title) return res.status(400).json({ error: 'title is required' });
     if (!calendarId) return res.status(400).json({ error: 'calendarId is required' });
 
-    const startAt = toDate(start) || new Date(); // default now
-    const endAt = toDate(end) || new Date(startAt.getTime() + 60 * 60 * 1000); // default +1h
+    const startDate = toDate(start);
+    const endDate = toDate(end);
 
-    if (!(await ensureOwnedCalendar(req.user.id, calendarId))) 
+    if (!startDate || !endDate || endDate <= startDate) 
     {
-        return res.status(404).json({ error: 'Calendar not found or not owned by user' });
-    }
-    if (endAt <= startAt) 
-    {
-        return res.status(400).json({ error: 'end must be after start' });
+        return res.status(400).json({ error: 'Invalid start/end' });
     }
 
-    const doc = await Event.create({
-        title: String(title).trim(),
-        start: startAt,
-        end: endAt,
-        allDay: !!allDay,
+    // need at least editor/admin on this calendar
+    await requireCalendarRole({
         calendarId,
-        owner: req.user.id, // REQUIRED by schema
-        location: location || undefined,
-        description: description || undefined,
-        recurrence: recurrence || undefined,
+        userId,
+        allowedRoles: ['admin', 'editor'],
     });
 
-    return res.status(201).json(doc);
+    const evt = new Event({
+        title,
+        start: startDate,
+        end: endDate,
+        allDay: !!allDay,
+        calendarId,
+        owner: userId,
+        location: location || '',
+        description: description || '',
+    });
+
+    await evt.save();
+    return res.status(201).json(evt);
 }
 
 // PUT /events/:id
 export async function updateEvent(req, res) 
 {
+    const userId = req.user.id;
     const { id } = req.params;
     const {
-        title, start, end, allDay,
-        calendarId, location, description, recurrence
+        title,
+        start,
+        end,
+        allDay,
+        location,
+        description,
     } = req.body || {};
 
-    const evt = await Event.findOne({ _id: id, owner: req.user.id });
+    const evt = await Event.findById(id);
     if (!evt) return res.status(404).json({ error: 'Event not found' });
 
-    if (title != null) evt.title = String(title).trim();
-    if (start != null) 
-    {
-        const s = toDate(start);
-        if (!s) return res.status(400).json({ error: 'Invalid start' });
-        evt.start = s;
-    }
-    if (end != null) 
-    {
-        const e = toDate(end);
-        if (!e) return res.status(400).json({ error: 'Invalid end' });
-        evt.end = e;
-    }
-    if (allDay != null) evt.allDay = !!allDay;
+    // require editor/admin on the calendar of this event
+    await requireCalendarRole({
+        calendarId: evt.calendarId,
+        userId,
+        allowedRoles: ['admin', 'editor'],
+    });
 
-    if (calendarId != null) 
+    if (title !== undefined) evt.title = title;
+    if (allDay !== undefined) evt.allDay = !!allDay;
+    if (location !== undefined) evt.location = location;
+    if (description !== undefined) evt.description = description;
+
+    let startDate = evt.start;
+    let endDate = evt.end;
+
+    if (start !== undefined) 
     {
-    // ensure new calendar belongs to user
-        if (!(await ensureOwnedCalendar(req.user.id, calendarId))) 
-        {
-            return res.status(404).json({ error: 'Calendar not found or not owned by user' });
-        }
-        evt.calendarId = calendarId;
+        const parsed = toDate(start);
+        if (!parsed) return res.status(400).json({ error: 'Invalid start' });
+        startDate = parsed;
+    }
+    if (end !== undefined) 
+    {
+        const parsed = toDate(end);
+        if (!parsed) return res.status(400).json({ error: 'Invalid end' });
+        endDate = parsed;
     }
 
-    if (location != null) evt.location = location || undefined;
-    if (description != null) evt.description = description || undefined;
-    if (recurrence != null) evt.recurrence = recurrence || undefined;
-
-    if (evt.end <= evt.start) 
+    if (endDate <= startDate) 
     {
-        return res.status(400).json({ error: 'end must be after start' });
+        return res.status(400).json({ error: 'Invalid start/end (end <= start)' });
     }
+
+    evt.start = startDate;
+    evt.end = endDate;
 
     await evt.save();
     return res.json(evt);
@@ -142,9 +187,19 @@ export async function updateEvent(req, res)
 // DELETE /events/:id
 export async function deleteEvent(req, res) 
 {
+    const userId = req.user.id;
     const { id } = req.params;
-    const evt = await Event.findOne({ _id: id, owner: req.user.id });
+
+    const evt = await Event.findById(id);
     if (!evt) return res.status(404).json({ error: 'Event not found' });
+
+    // require editor/admin on the calendar of this event
+    await requireCalendarRole({
+        calendarId: evt.calendarId,
+        userId,
+        allowedRoles: ['admin', 'editor'],
+    });
+
     await evt.deleteOne();
     return res.status(204).send();
 }

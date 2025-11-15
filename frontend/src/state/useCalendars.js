@@ -1,13 +1,38 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client.js';
-
+import { useAuth } from '../state/AuthContext.jsx';
 
 const fallbackColors = ['#6c6cff', '#56b4d3', '#a16eff', '#72d572', '#ff8a65', '#ffd54f'];
+
+function computeMyRole(calendar, userId) 
+{
+    if (!userId) return null;
+
+    // owner
+    if (calendar.owner && String(calendar.owner) === String(userId)) 
+    {
+        return 'owner';
+    }
+
+    // members: [{ user, role }]
+    if (Array.isArray(calendar.members)) 
+    {
+        const m = calendar.members.find(
+            (m) => m.user && String(m.user) === String(userId)
+        );
+        if (m?.role) return m.role;
+    }
+
+    return null;
+}
 
 export default function useCalendars() 
 {
     const [calendars, setCalendars] = useState([]);
-    const [activeIds, setActiveIds] = useState([]);
+    const [activeId, setActiveId] = useState(null);
+
+    const { user } = useAuth();
+    const userId = user?.id ?? user?._id ?? user?.userId ?? null;
 
     useEffect(() => 
     {
@@ -19,21 +44,36 @@ export default function useCalendars()
                 const enriched = data.map((c, i) => 
                 {
                     const id = c.id ?? c._id ?? String(i);
-                    return { ...c, id, color: c.color || fallbackColors[i % fallbackColors.length] };
+                    const color = c.color || fallbackColors[i % fallbackColors.length];
+                    const myRole = computeMyRole(c, userId);
+
+                    return {
+                        ...c,
+                        id,
+                        color,
+                        myRole,
+                    };
                 });
+
                 setCalendars(enriched);
-                setActiveIds(enriched.map((c) => c.id));
+
+                setActiveId((prev) =>
+                    prev && enriched.some(c => c.id === prev)
+                        ? prev
+                        : enriched[0]?.id ?? null
+                );
             }
             catch (e) 
             {
-                alert(e.message); 
+                alert(e.message);
             }
         })();
-    }, []);
+    // re-run if user changes (login/logout)
+    }, [userId]);
 
-    function toggleCalendar(id) 
+    function selectCalendar(id) 
     {
-        setActiveIds((ids) => ids.includes(id) ? ids.filter(x => x !== id) : [...ids, id]);
+        setActiveId((prev) => prev === id ? null : id);
     }
 
     async function createCalendar({ name, color }) 
@@ -41,13 +81,22 @@ export default function useCalendars()
         try 
         {
             const created = await api.createCalendar({ name, color });
-            const withId = { ...created, id: created.id ?? created._id };
-            setCalendars((prev) => [...prev, withId]);
-            setActiveIds((ids) => [...ids, withId.id]);
+            const id = created.id ?? created._id;
+            const myRole = computeMyRole(created, userId) || (userId ? 'owner' : null);
+
+            const withMeta = {
+                ...created,
+                id,
+                color: created.color || color || fallbackColors[0],
+                myRole,
+            };
+
+            setCalendars((prev) => [...prev, withMeta]);
+            setActiveId(withMeta.id);
         }
         catch (e) 
         {
-            alert(e.message); 
+            alert(e.message);
         }
     }
 
@@ -57,11 +106,20 @@ export default function useCalendars()
         {
             const updated = await api.updateCalendar(id, patch);
             const withId = { ...updated, id: updated.id ?? updated._id };
-            setCalendars((prev) => prev.map(c => c.id === id ? withId : c));
+
+            // recompute myRole using latest owner/members
+            const myRole = computeMyRole(withId, userId);
+
+            setCalendars((prev) =>
+                prev.map(c => c.id === id
+                    ? { ...withId, color: withId.color || c.color, myRole }
+                    : c
+                )
+            );
         }
         catch (e) 
         {
-            alert(e.message); 
+            alert(e.message);
         }
     }
 
@@ -70,14 +128,22 @@ export default function useCalendars()
         try 
         {
             await api.deleteCalendar(id);
-            setCalendars((prev) => prev.filter(c => c.id !== id));
-            setActiveIds((ids) => ids.filter(x => x !== id));
+            setCalendars((prev) =>
+            {
+                const filtered = prev.filter(c => c.id !== id);
+                setActiveId((currentActive) =>
+                {
+                    if (currentActive !== id) return currentActive;
+                    return filtered[0]?.id ?? null;
+                });
+                return filtered;
+            });
         }
         catch (e) 
         {
-            alert(e.message); 
+            alert(e.message);
         }
     }
 
-    return { calendars, activeIds, toggleCalendar, createCalendar, updateCalendar, deleteCalendar };
+    return { calendars, activeId, selectCalendar, createCalendar, updateCalendar, deleteCalendar };
 }

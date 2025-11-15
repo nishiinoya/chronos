@@ -24,7 +24,7 @@ export const register = async (req, res) =>
     // create default calendar for this user
     await Calendar.create({ userId: user._id, name: "Main Calendar", color: "#6c6cff", owner: user._id });
 
-    res.json({ token: generateToken(user) });
+    res.json({ token: generateToken(user), user: user});
 };
 
 /** POST /api/auth/login */
