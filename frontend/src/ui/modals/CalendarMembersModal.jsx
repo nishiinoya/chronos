@@ -139,8 +139,9 @@ export default function CalendarMembersModal({ calendar, onClose })
         <div className="modal-backdrop">
             <div className="modal">
                 <div className="modal-header">
+                <button className="btn icon" onClick={onClose}>✕</button>
                     <h2>Manage members – {calendar.name}</h2>
-                    <button className="btn icon" onClick={onClose}>✕</button>
+                    
                 </div>
 
                 {loading && <div className="muted">Loading…</div>}
@@ -149,7 +150,7 @@ export default function CalendarMembersModal({ calendar, onClose })
                 {!loading && !error && (
                     <>
                         <section>
-                            <h3>Owner</h3>
+                            <h3>Owner:</h3>
                             {owner ? (
                                 <div className="card-row">
                                     <div>
@@ -176,7 +177,7 @@ export default function CalendarMembersModal({ calendar, onClose })
                                     </div>
                                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                         <select
-                                            className="input"
+                                            className="input-select"
                                             value={m.role}
                                             onChange={(e) => changeMemberRole(m.userId, e.target.value)}
                                         >
@@ -234,7 +235,7 @@ export default function CalendarMembersModal({ calendar, onClose })
                                     onChange={(e) => setInviteEmail(e.target.value)}
                                 />
                                 <select
-                                    className="input"
+                                    className="input-select"
                                     value={inviteRole}
                                     onChange={(e) => setInviteRole(e.target.value)}
                                     style={{ maxWidth: 140 }}
@@ -243,7 +244,7 @@ export default function CalendarMembersModal({ calendar, onClose })
                                         <option key={r.value} value={r.value}>{r.label}</option>
                                     ))}
                                 </select>
-                                <button className="btn" type="submit" disabled={busy || !inviteEmail.trim()}>
+                                <button className="btn-send-invite" type="submit" disabled={busy || !inviteEmail.trim()}>
                                     Send invite
                                 </button>
                             </form>

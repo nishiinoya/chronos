@@ -9,7 +9,7 @@ export default function CalendarHeader({ title, view='month', onChangeView, onPr
                 <h1 className="title">{title}</h1>
             </div>
             <div className="right">
-                <select className="input" value={view} onChange={(e)=>onChangeView?.(e.target.value)}>
+                <select className="input-select" value={view} onChange={(e)=>onChangeView?.(e.target.value)}>
                     <option value="month">Month</option>
                     <option value="week">Week</option>
                     <option value="day">Day</option>

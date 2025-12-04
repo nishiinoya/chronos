@@ -42,7 +42,7 @@ export default function LoginPage()
                 <label className="fld"><span>Password</span>
                     <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
                 </label>
-                <button className="btn" disabled={busy} type="submit">Login</button>
+                <button className="btn-login" disabled={busy} type="submit">Login</button>
                 <div className="muted">No account? <Link to="/register">Register</Link></div>
             </form>
         </div>

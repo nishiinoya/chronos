@@ -143,7 +143,8 @@ export default function SidebarCalendars({
 
     return (
         <aside className="sidebar">
-            <div className="sidebar-title">Calendars</div>
+            <div className="sidebar-title">CHRONOS</div>
+           
 
             {/* Holidays toggle */}
             <ul className="calendar-list">
@@ -200,9 +201,11 @@ export default function SidebarCalendars({
             </div>
 
             {/* Create calendar */}
+            <div className="sidebar-section-title">Create a new calendar</div>
             <form className="create-row" onSubmit={handleCreate}>
+           
                 <input
-                    className="input"
+                    className="input-new-calendar"
                     placeholder="New calendar name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
@@ -210,20 +213,20 @@ export default function SidebarCalendars({
                 <input
                     title="Color"
                     type="color"
-                    className="input"
+                    className="input-color"
                     value={color}
                     onChange={(e)=>setColor(e.target.value)}
                     style={{ padding: 0, width: 44, minWidth: 44 }}
                 />
-                <button className="btn" type="submit">Add</button>
+                <button className="btn-add-calendar" type="submit">Add</button>
             </form>
 
             {/* User info */}
             <div className="sidebar-user">
-                <div className="muted">
+                <div className="muted-text">
                     {user ? `Signed in as ${user.name || user.email}` : ''}
                 </div>
-                <button className="btn" onClick={logout}>Logout</button>
+                <button className="btn-logout" onClick={logout}>Logout</button>
             </div>
 
             {editing && (

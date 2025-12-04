@@ -186,6 +186,7 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
                 <label className="fld">
                     <span>Type</span>
                     <select
+                        className="input-select"
                         value={form.type}
                         onChange={(e)=>setForm({...form, type:e.target.value})}
                         disabled={!canEdit || !!event} // lock type on existing events
@@ -228,6 +229,7 @@ export default function EventModal({ date, event, calendars, activeCalendarId, o
                 <label className="fld">
                     <span>Calendar</span>
                     <select
+                        className="input-select"
                         value={form.calendarId}
                         onChange={(e)=>setForm({...form, calendarId:e.target.value})}
                         disabled={!canEdit || !!event} // don’t move existing events between calendars for now

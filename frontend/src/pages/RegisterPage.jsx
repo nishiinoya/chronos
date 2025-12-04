@@ -46,7 +46,7 @@ export default function RegisterPage()
                 <label className="fld"><span>Password</span>
                     <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required />
                 </label>
-                <button className="btn" disabled={busy} type="submit">Register</button>
+                <button className="btn-login" disabled={busy} type="submit">Register</button>
                 <div className="muted">Already have an account? <Link to="/login">Login</Link></div>
             </form>
         </div>
