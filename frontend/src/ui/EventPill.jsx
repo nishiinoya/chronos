@@ -1,39 +1,28 @@
-export default function EventPill({ title, time, color, type, onClick }) 
-{
-    // choose icon by event type
-    let icon = null;
-    if (type === "arrangement") icon = "📅";
-    else if (type === "reminder") icon = "⏰";
-    else if (type === "task") icon = "📝";
-    else icon = "•";
+export default function EventPill({ title, time, color, type, onClick }) {
+  let icon = null;
+  if (type === "arrangement") icon = "📅";
+  else if (type === "reminder") icon = "⏰";
+  else if (type === "task") icon = "📝";
+  else icon = "•";
 
-    // slight color variations depending on type (optional)
-    // still keeps your main color but adds a subtle background tint
-    const background = `${color}22`; // low-opacity color
+  const background = `${color}22`; // subtle tint
 
-    return (
-        <button
-            className="pill"
-            onClick={onClick}
-            title={title}
-            style={{
-                borderLeftColor: color,
-                background: background,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-            }}
-        >
-            <span className="pill-dot" style={{ background: color }} />
+  return (
+    <button
+      type="button"
+      className="pill"
+      style={{ background }}
+      onClick={onClick}
+    >
+      <span className="pill-dot" style={{ background: color }} />
 
-            {/* icon */}
-            <span style={{ fontSize: 13 }}>{icon}</span>
+      <span className="pill-icon" aria-hidden="true" style={{ fontSize: 13 }}>
+        {icon}
+      </span>
 
-            {/* time */}
-            <span className="pill-time">{time}</span>
+      <span className="pill-time">{time}</span>
 
-            {/* title */}
-            <span className="pill-title">{title}</span>
-        </button>
-    );
+      <span className="pill-title">{title}</span>
+    </button>
+  );
 }

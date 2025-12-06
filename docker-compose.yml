@@ -49,6 +49,15 @@ services:
       ME_CONFIG_MONGODB_URL: mongodb://root:rootpass@mongo:27017/?authSource=admin
     depends_on:
       - mongo
+  notifier:
+    build:
+      context: ./backend
+    container_name: chronos-notifier
+    command: node src/notificationWorker.js
+    env_file:
+      - ./backend/.env
+    depends_on:
+      - mongo  
 
 volumes:
   mongo-data:

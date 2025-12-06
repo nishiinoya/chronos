@@ -2,17 +2,17 @@ import express from "express";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import {
-    getCalendars,
-    createCalendar,
-    updateCalendar,
-    deleteCalendar,
-    getCalendarMembers,
-    inviteCalendarMember,
-    acceptCalendarInvite,
-    updateCalendarMember,
-    removeCalendarMember,
-    getCalendarInvites,
-    cancelCalendarInvite,
+  getCalendars,
+  createCalendar,
+  updateCalendar,
+  deleteCalendar,
+  getCalendarMembers,
+  inviteCalendarMember,
+  acceptCalendarInvite,
+  updateCalendarMember,
+  removeCalendarMember,
+  getCalendarInvites,
+  cancelCalendarInvite,
 } from "../controllers/calendarController.js";
 
 const router = express.Router();
@@ -37,6 +37,5 @@ router.post("/invites/:token/accept", asyncHandler(acceptCalendarInvite));
 
 // cancel invite by id
 router.delete("/invites/:inviteId", asyncHandler(cancelCalendarInvite));
-
 
 export default router;
