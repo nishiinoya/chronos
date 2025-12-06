@@ -30,15 +30,7 @@ function hexToRgba(hex, a = 0.18) {
 }
 
 /**
- * Layout timed events for a single day.
- * Expects events that already have:
- *   - _visualStart: Date
- *   - _visualEnd:   Date  (with guaranteed _visualEnd > _visualStart)
- *
- * - Holidays (calendarId === 'system_holidays' or source === 'holidays')
- *   are rendered as full-day timed blocks.
- * - Non-holiday all-day events are excluded here (shown in header strip).
- * - Overlaps are split into columns.
+ * Desktop timed-event layout for a single day (grid).
  */
 function layoutDay(events, dayStart, dayEnd, pxPerMinute) {
   const slices = events
@@ -137,14 +129,25 @@ export default function CalendarWeek({
     [calendars]
   );
 
-  // Measure one .hour to sync slot height
+  // simple runtime mobile check
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+
+  // Measure one .hour to sync slot height (desktop)
   const hourRef = useRef(null);
   const [hourHeight, setHourHeight] = useState(60);
   const pxPerMinute = hourHeight / 60;
 
+  const [now, setNow] = useState(new Date());
+
   useEffect(() => {
     const h = hourRef.current?.offsetHeight;
     if (h && h > 0) setHourHeight(h);
+  }, []);
+
+  // update "now" every 10s for realtime-ish line
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 10_000);
+    return () => clearInterval(id);
   }, []);
 
   /**
@@ -173,6 +176,152 @@ export default function CalendarWeek({
       };
     });
   }, [events]);
+
+  // ------------------------------------
+  // MOBILE: agenda-style week list
+  // ------------------------------------
+  if (isMobile) {
+    return (
+      <div className="week-mobile">
+        {days.map((d) => {
+          const ds = startOfDay(d);
+          const de = endOfDay(d);
+
+          const dayEvents = normalizedEvents
+            .filter((ev) => ev._visualEnd > ds && ev._visualStart < de)
+            .sort(
+              (a, b) => toDate(a.start).getTime() - toDate(b.start).getTime()
+            );
+
+          return (
+            <section key={d.toISOString()} className="week-mobile-day">
+              <header className="week-mobile-day-header">
+                <span className="week-mobile-day-title">
+                  {format(d, "EEE d MMM")}
+                </span>
+                {isSameDay(d, new Date()) && (
+                  <span className="week-mobile-today-pill">Today</span>
+                )}
+              </header>
+
+              <div className="week-mobile-day-events">
+                {dayEvents.length === 0 && (
+                  <div className="week-mobile-empty">No events</div>
+                )}
+
+                {dayEvents.map((ev) => {
+                  const color = calById[ev.calendarId]?.color || "#6c6cff";
+
+                  const type = ev.type;
+                  const isHoliday =
+                    ev.calendarId === "system_holidays" ||
+                    ev.source === "holidays";
+                  const isAllDayLike = ev.allDay || isHoliday;
+
+                  let timeLabel = "";
+                  let icon = " ";
+
+                  if (type === "arrangement") icon = "📅";
+                  else if (type === "reminder") icon = "⏰";
+                  else if (type === "task") icon = "📝";
+
+                  if (!isAllDayLike) {
+                    const startTime = format(toDate(ev.start), "HH:mm");
+                    const endTime = format(toDate(ev.end ?? ev.start), "HH:mm");
+
+                    if (type === "arrangement") {
+                      timeLabel = `${startTime}–${endTime}`;
+                    } else if (type === "reminder") {
+                      timeLabel = startTime;
+                    } else if (type === "task") {
+                      timeLabel = startTime;
+                    }
+                  } else {
+                    timeLabel = "All day";
+                  }
+
+                  return (
+                    <button
+                      key={ev.id}
+                      className="week-mobile-pill"
+                      style={{
+                        borderColor: color,
+                        borderLeftColor: color,
+                        background: hexToRgba(color, 0.18),
+                      }}
+                      onClick={() => onEventClick?.(ev)}
+                    >
+                      <span
+                        className="pill-dot"
+                        style={{ background: color }}
+                      />
+                      <div className="week-mobile-pill-main">
+                        <div className="week-mobile-pill-top">
+                          <span className="week-mobile-pill-icon">{icon}</span>
+                          {timeLabel && (
+                            <span className="week-mobile-pill-time">
+                              {timeLabel}
+                            </span>
+                          )}
+                        </div>
+                        <div className="week-mobile-pill-title">{ev.title}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // ------------------------------------
+  // DESKTOP: grid week view with variable day widths + timeline
+  // ------------------------------------
+
+  // Per-day "load" = number of events intersecting that day
+  const dayWeights = useMemo(() => {
+    const counts = new Map();
+    let maxCount = 0;
+
+    for (const d of days) {
+      const ds = startOfDay(d);
+      const de = endOfDay(d);
+      const count = normalizedEvents.filter(
+        (ev) => ev._visualEnd > ds && ev._visualStart < de
+      ).length;
+      const key = +ds;
+      counts.set(key, count);
+      if (count > maxCount) maxCount = count;
+    }
+
+    const weights = new Map();
+    for (const [key, count] of counts.entries()) {
+      if (maxCount === 0) {
+        weights.set(key, 1);
+      } else {
+        const ratio = count / maxCount; // 0..1
+        const weight = 0.8 + ratio * 0.8; // 0.8fr .. 1.6fr
+        weights.set(key, weight);
+      }
+    }
+    return weights;
+  }, [days, normalizedEvents]);
+
+  // Build a gridTemplateColumns string that matches the weights
+  const columnTemplate = useMemo(() => {
+    const dayCols = days
+      .map((d) => {
+        const key = +startOfDay(d);
+        const w = dayWeights.get(key) ?? 1;
+        return `${w.toFixed(2)}fr`;
+      })
+      .join(" ");
+    // 80px time column + 7 day columns
+    return `80px ${dayCols}`;
+  }, [days, dayWeights]);
 
   // For each day, pick events whose visual interval intersects that day
   const positionedByDay = useMemo(() => {
@@ -211,7 +360,10 @@ export default function CalendarWeek({
 
   return (
     <div className="week-wrap">
-      <div className="week-header">
+      <div
+        className="week-header"
+        style={{ gridTemplateColumns: columnTemplate }}
+      >
         <div className="wh-cell time-col" />
         {days.map((d) => (
           <div
@@ -223,7 +375,10 @@ export default function CalendarWeek({
         ))}
       </div>
 
-      <div className="week-body">
+      <div
+        className="week-body"
+        style={{ gridTemplateColumns: columnTemplate }}
+      >
         <div className="time-col">
           {HOURS.map((h, i) => (
             <div key={h} ref={i === 0 ? hourRef : null} className="hour">
@@ -233,9 +388,17 @@ export default function CalendarWeek({
         </div>
 
         {days.map((d) => {
-          const key = +startOfDay(d);
+          const ds = startOfDay(d);
+          const key = +ds;
           const positioned = positionedByDay.get(key) || [];
           const allDay = allDayByDay.get(key) || [];
+
+          const isToday = isSameDay(d, now);
+          const showNowLine = isToday && now >= ds && now <= endOfDay(d);
+
+          const nowTop = showNowLine
+            ? ((now.getTime() - ds.getTime()) / 60000) * pxPerMinute
+            : null;
 
           return (
             <div
@@ -267,6 +430,35 @@ export default function CalendarWeek({
                   zIndex: 1,
                 }}
               >
+                {showNowLine && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: nowTop,
+                      left: 0,
+                      right: 0,
+                      height: 0,
+                      borderTop: "2px solid #4ade80",
+                      pointerEvents: "none",
+                      zIndex: 2,
+                    }}
+                  >
+                    <div
+                      style={{
+                        position: "absolute",
+                        left: 2,
+                        transform: "translateY(-50%)",
+                        fontSize: 10,
+                        padding: "0 4px",
+                        borderRadius: 4,
+                        background: "rgba(0,0,0,0.7)",
+                      }}
+                    >
+                      {format(now, "HH:mm")}
+                    </div>
+                  </div>
+                )}
+
                 {positioned.map((p) => {
                   const color = calById[p.event.calendarId]?.color || "#6c6cff";
 
@@ -280,7 +472,7 @@ export default function CalendarWeek({
                   let titleLabel = p.event.title;
 
                   // base icon
-                  let icon = "•";
+                  let icon = " ";
                   if (type === "arrangement") icon = "📅";
                   else if (type === "reminder") icon = "⏰";
                   else if (type === "task") icon = "📝";
@@ -294,21 +486,17 @@ export default function CalendarWeek({
                     );
 
                     if (type === "arrangement") {
-                      // full range
                       timeLabel = `${startTime}–${endTime}`;
                     } else if (type === "reminder") {
-                      // just one time
                       timeLabel = startTime;
                     } else if (type === "task") {
-                      // tasks: no time label, title only
-                      timeLabel = "";
+                      timeLabel = startTime;
                     }
                   } else {
-                    // all-day / holidays: just show the name
                     timeLabel = "";
                   }
 
-                  const pillBg = `${color}22`;
+                  const pillBg = hexToRgba(color, 0.18);
 
                   return (
                     <div
@@ -335,7 +523,7 @@ export default function CalendarWeek({
                           borderLeftColor: color,
                           background: pillBg,
                           display: "flex",
-                          alignItems: "start",
+                          alignItems: "flex-start",
                           gap: 6,
                           borderRadius: 5,
                           border: "1px solid " + color,
@@ -359,8 +547,9 @@ export default function CalendarWeek({
                         <span
                           className="pill-title"
                           style={{
-                            textOverflow: "ellipsis",
+                            whiteSpace: "normal",
                             overflow: "hidden",
+                            textOverflow: "ellipsis",
                             flex: 1,
                           }}
                         >
@@ -371,7 +560,7 @@ export default function CalendarWeek({
                   );
                 })}
 
-                {/* all-day events could be rendered as chips in header if you want later */}
+                {/* all-day events placeholder */}
                 {allDay.length > 0 && null}
               </div>
             </div>

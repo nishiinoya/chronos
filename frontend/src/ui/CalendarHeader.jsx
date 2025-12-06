@@ -6,10 +6,21 @@ export default function CalendarHeader({
   onNext,
   onToday,
   onCreateEvent,
+  onOpenSidebar, // mobile hamburger
 }) {
   return (
     <header className="header">
       <div className="left">
+        {/* Hamburger for mobile (hidden on desktop via CSS) */}
+        <button
+          type="button"
+          className="hamburger-btn"
+          onClick={() => onOpenSidebar?.()}
+          aria-label="Open sidebar"
+        >
+          ☰
+        </button>
+
         <button className="btn" onClick={onToday}>
           Today
         </button>
@@ -22,7 +33,7 @@ export default function CalendarHeader({
 
         <h1 className="title">{title}</h1>
 
-        {/* + right next to the title */}
+        {/* Create event button next to title */}
         <button
           type="button"
           className="btn icon"

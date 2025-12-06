@@ -255,6 +255,23 @@ body {
   color: #fecaca;
 }
 
+/* Hamburger hidden by default (desktop) */
+.hamburger-btn {
+  display: none;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Floating add button hidden by default (desktop) */
+.fab-add {
+  display: none;
+}
+
+/* Month view */
+
 .month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
@@ -344,6 +361,8 @@ body {
   color: var(--text);
 }
 
+/* === MODALS (desktop & mobile) === */
+
 .modal-backdrop {
   position: fixed;
   z-index: 10000;
@@ -353,13 +372,82 @@ body {
   place-items: center;
 }
 
+/* default = centered card, limited height */
 .modal {
   width: 520px;
   max-width: calc(100% - 24px);
+  max-height: 90vh;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.modal-actions {
+  margin-top: 12px;
+}
+
+/* cards used inside members modal */
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- MOBILE: smaller, not full height ---- */
+@media (max-width: 768px) {
+  .modal-backdrop {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 16px 8px;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 430px; /* narrower card */
+    height: auto;
+    max-height: 80vh; /* <— main change: not full screen */
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .modal-body {
+    padding-right: 0;
+  }
+
+  .modal-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .modal-actions .btn {
+    flex: 1 1 auto;
+  }
 }
 
 .fld {
@@ -384,10 +472,18 @@ body {
   border-radius: 6px;
 }
 
+/* desktop: two columns */
 .row {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+/* event modal: stack Start/End on narrow modals */
+@media (max-width: 600px) {
+  .modal .row--dates {
+    grid-template-columns: 1fr;
+  }
 }
 
 .actions {
@@ -397,7 +493,7 @@ body {
   align-items: center;
 }
 
-/* …existing styles… */
+/* Auth */
 
 .auth-wrap {
   display: grid;
@@ -430,6 +526,14 @@ body {
   position: absolute;
   margin-top: 40px;
 }
+.link-button {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
 
 .input-color {
   width: 10%;
@@ -445,7 +549,7 @@ body {
   border-radius: 0;
   line-height: 1;
   padding: 2px;
-  border-radius: 4px;
+  border-radius: 50px;
   border: 1px solid var(--border);
   color: var(--text);
   background: var(--panel-2);
@@ -462,8 +566,6 @@ body {
   background: var(--panel);
   border-top: 1px solid var(--border);
 }
-
-/* existing styles remain */
 
 /* Week view */
 
@@ -496,6 +598,14 @@ body {
   grid-template-columns: 80px repeat(7, 1fr);
   flex: 1;
   overflow: auto;
+}
+
+/* Day view */
+
+.day-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 .day-body {
@@ -539,20 +649,11 @@ body {
   pointer-events: auto;
 }
 
-/* Day view */
-
-.day-wrap {
-  flex-direction: column;
-  height: 100%;
-}
-
 .day-header {
   background: var(--panel);
   border-bottom: 1px solid var(--border);
   padding: 10px 14px;
 }
-
-/* …keep everything you already have… */
 
 .btn.icon {
   padding: 4px 8px;
@@ -572,4 +673,347 @@ body {
   border: none;
   background: transparent;
   cursor: pointer;
+}
+
+/* ---------------------------------------
+   MOBILE LAYOUT — behaves like real app
+----------------------------------------- */
+
+@media (max-width: 768px) {
+  /* Let page scroll naturally */
+  html,
+  body,
+  #root {
+    height: auto;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .main {
+    height: auto;
+  }
+
+  .week-wrap,
+  .day-wrap {
+    height: auto;
+  }
+
+  /* Sidebar as drawer */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: -320px;
+    width: 280px;
+    height: 100%;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 12px;
+    z-index: 1000;
+    overflow-y: auto;
+    transition: left 0.28s ease;
+  }
+
+  .sidebar.open {
+    left: 0;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 900;
+  }
+
+  .header {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .left {
+    gap: 6px;
+  }
+
+  .title {
+    font-size: 16px;
+    margin-left: 4px;
+  }
+
+  .hamburger-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 20px;
+  }
+
+  /* Month view: slightly tighter */
+  .month-grid {
+    font-size: 12px;
+  }
+
+  .cell {
+    padding: 4px;
+  }
+
+  /* Pills: wrap inside, not outside */
+  .pill {
+    padding: 3px 4px;
+    font-size: 12px;
+    gap: 4px;
+    align-items: flex-start;
+    overflow: hidden;
+    white-space: normal;
+  }
+
+  .pill-title {
+    white-space: normal;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 12px;
+  }
+
+  .pill-time {
+    white-space: nowrap;
+    font-size: 10px;
+  }
+
+  /* Week view: wide columns + horizontal scroll like real apps */
+  .week-header {
+    grid-template-columns: 50px repeat(7, minmax(260px, 1fr));
+    overflow-x: auto;
+  }
+
+  .week-body {
+    grid-template-columns: 50px repeat(7, minmax(260px, 1fr));
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .hour {
+    height: 44px;
+    font-size: 10px;
+  }
+
+  .slot {
+    height: 44px;
+  }
+
+  /* Day view: more compact rows */
+  .day-body {
+    grid-template-columns: 50px 1fr;
+  }
+
+  /* Floating add button on mobile */
+  .fab-add {
+    display: grid;
+    place-items: center;
+    position: fixed;
+    bottom: 16px;
+    right: 16px;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: white;
+    font-size: 28px;
+    border: none;
+    cursor: pointer;
+    z-index: 3000;
+  }
+}
+
+/* Mobile week agenda view */
+
+.week-mobile {
+  display: flex;
+  flex-direction: column;
+}
+
+.week-mobile-day {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+}
+
+.week-mobile-day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.week-mobile-day-title {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.week-mobile-today-pill {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 11px;
+}
+
+.week-mobile-day-events {
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.week-mobile-empty {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.week-mobile-pill {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  padding: 6px 8px;
+  background: #0b1022;
+  cursor: pointer;
+}
+
+.week-mobile-pill-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.week-mobile-pill-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.week-mobile-pill-icon {
+  font-size: 13px;
+}
+
+.week-mobile-pill-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.week-mobile-pill-title {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+/* Month mobile container */
+.month-mobile {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Day mobile container */
+.day-mobile {
+  padding: 8px 12px;
+}
+
+.day-mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 4px;
+}
+
+.day-mobile-events {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.day-mobile-all-day {
+  margin-bottom: 6px;
+}
+
+/* Make selects inside modals fill the field width */
+.modal .input-select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Slightly smaller padding in modals so it doesn't feel huge */
+@media (max-width: 600px) {
+  .modal .input,
+  .modal .input-select {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+
+  .fld > span {
+    font-size: 12px;
+  }
+}
+
+/* small "+N more" indicator inside month cell */
+.pill-more {
+  color: var(--text);
+  justify-content: center;
+  font-size: 11px;
+  padding: 2px 4px;
+  border-left-width: 1px;
+}
+
+/* event list inside "day details" modal (opened by +N more) */
+.month-day-event-pill {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  border-left-width: 4px;
+  padding: 6px 8px;
+  background: #0b1022;
+  cursor: pointer;
+  margin-bottom: 6px;
+}
+
+.month-day-event-pill-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.month-day-event-pill-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.month-day-event-pill-time {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.month-day-event-pill-title {
+  font-size: 13px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
 }

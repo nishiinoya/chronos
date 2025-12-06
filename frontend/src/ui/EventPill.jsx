@@ -3,7 +3,7 @@ export default function EventPill({ title, time, color, type, onClick }) {
   if (type === "arrangement") icon = "📅";
   else if (type === "reminder") icon = "⏰";
   else if (type === "task") icon = "📝";
-  else icon = "•";
+  else icon = " ";
 
   const background = `${color}22`; // subtle tint
 

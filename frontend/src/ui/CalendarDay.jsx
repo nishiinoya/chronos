@@ -1,3 +1,4 @@
+// frontend/src/ui/CalendarDay.jsx
 import { useMemo, useEffect, useRef, useState } from "react";
 import {
   format,
@@ -8,10 +9,11 @@ import {
   min,
   setHours,
   setMinutes,
+  isSameDay,
 } from "date-fns";
 
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
-const MIN_BLOCK_MINUTES = 20; // visual duration for zero-length events
+const MIN_BLOCK_MINUTES = 20;
 
 function toDate(d) {
   return d instanceof Date ? d : new Date(d);
@@ -25,24 +27,12 @@ function hexToRgba(hex, a = 0.18) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-/**
- * Layout timed events for a single day.
- * Expects events that already have:
- *   - _visualStart: Date
- *   - _visualEnd:   Date  (with guaranteed _visualEnd > _visualStart)
- *
- * - Holidays (calendarId === 'system_holidays' or source === 'holidays')
- *   are rendered as full-day timed blocks.
- * - Non-holiday all-day events are excluded here (shown in header strip).
- * - Overlaps are split into columns.
- */
 function layoutDay(events, dayStart, dayEnd, pxPerMinute) {
   const slices = events
     .map((ev) => {
       const isHoliday =
         ev.calendarId === "system_holidays" || ev.source === "holidays";
 
-      // Non-holiday all-day stays in the header strip; holidays render in the grid.
       if (ev.allDay && !isHoliday) return null;
 
       const s0 = ev._visualStart ?? toDate(ev.start);
@@ -58,7 +48,6 @@ function layoutDay(events, dayStart, dayEnd, pxPerMinute) {
     .filter(Boolean)
     .sort((a, b) => a.start - b.start || b.end - a.end);
 
-  // Build groups of overlapping intervals (interval graph)
   const groups = [];
   for (const it of slices) {
     let placed = false;
@@ -117,37 +106,40 @@ function layoutDay(events, dayStart, dayEnd, pxPerMinute) {
 }
 
 export default function CalendarDay({
-  cursor, // Date of the day being shown
+  cursor,
   events = [],
   calendars = [],
-  onSlotDoubleClick, // (date) => void  (used for single-click too)
-  onEventClick, // (event) => void
+  onSlotDoubleClick,
+  onEventClick,
 }) {
+  const isMobile = typeof window !== "undefined" && window.innerWidth <= 768;
+
   const dayStart = startOfDay(cursor);
   const dayEnd = endOfDay(cursor);
 
-  // calendar colors lookup
   const calById = useMemo(
     () => Object.fromEntries(calendars.map((c) => [c.id, c])),
     [calendars]
   );
 
-  // Measure the left time column .hour height to sync the grid
   const hourRef = useRef(null);
   const [hourHeight, setHourHeight] = useState(60);
   const pxPerMinute = hourHeight / 60;
+
+  const [now, setNow] = useState(new Date());
 
   useEffect(() => {
     const h = hourRef.current?.offsetHeight;
     if (h && h > 0) setHourHeight(h);
   }, []);
 
-  /**
-   * Normalize events:
-   * - Compute real start/end
-   * - Add visualStart/visualEnd with MIN_BLOCK_MINUTES if duration <= 0
-   * - Use visual interval for "intersects this day?" filter
-   */
+  // update "now" every 10s so line moves smoothly-ish
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 10_000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Normalize events (visual interval) and filter to this day
   const dayEvents = useMemo(() => {
     const normalized = events.map((ev) => {
       const realStart = toDate(ev.start);
@@ -169,32 +161,148 @@ export default function CalendarDay({
       };
     });
 
-    const filtered = normalized.filter(
+    return normalized.filter(
       (ev) => ev._visualEnd > dayStart && ev._visualStart < dayEnd
     );
-
-    return filtered;
   }, [events, dayStart, dayEnd]);
 
-  // Non-holiday all-day events for the header strip
   const allDayEvents = useMemo(
     () =>
       dayEvents.filter((e) => e.allDay && e.calendarId !== "system_holidays"),
     [dayEvents]
   );
 
-  // Positioned timed events (includes holidays as full-day blocks)
+  const timedEvents = useMemo(
+    () =>
+      dayEvents.filter((e) => !e.allDay || e.calendarId === "system_holidays"),
+    [dayEvents]
+  );
+
+  // -------------------------------------------------
+  // MOBILE: agenda for this day
+  // -------------------------------------------------
+  if (isMobile) {
+    const sorted = timedEvents.slice().sort((a, b) => {
+      return toDate(a.start).getTime() - toDate(b.start).getTime();
+    });
+
+    return (
+      <div className="day-mobile">
+        <header className="day-mobile-header">
+          <span className="week-mobile-day-title">
+            {format(cursor, "EEEE, d MMM yyyy")}
+          </span>
+        </header>
+
+        <div className="day-mobile-events">
+          {allDayEvents.length > 0 && (
+            <div className="day-mobile-all-day">
+              {allDayEvents.map((e) => {
+                const color = calById[e.calendarId]?.color || "#6c6cff";
+                return (
+                  <div
+                    key={e.id}
+                    className="all-day-pill"
+                    style={{
+                      borderRadius: 999,
+                      padding: "2px 8px",
+                      marginRight: 4,
+                      background: hexToRgba(color, 0.15),
+                      border: `1px solid ${color}`,
+                      display: "inline-block",
+                      fontSize: 11,
+                    }}
+                    onClick={() => onEventClick?.(e)}
+                  >
+                    {e.title}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {sorted.length === 0 && allDayEvents.length === 0 && (
+            <div className="week-mobile-empty">No events</div>
+          )}
+
+          {sorted.map((ev) => {
+            const color = calById[ev.calendarId]?.color || "#6c6cff";
+
+            const type = ev.type;
+            const isHoliday =
+              ev.calendarId === "system_holidays" || ev.source === "holidays";
+            const isAllDayLike = ev.allDay || isHoliday;
+
+            let icon = " ";
+            if (type === "arrangement") icon = "📅";
+            else if (type === "reminder") icon = "⏰";
+            else if (type === "task") icon = "📝";
+
+            let timeLabel = "";
+            if (!isAllDayLike) {
+              const startTime = format(toDate(ev.start), "HH:mm");
+              const endTime = format(toDate(ev.end ?? ev.start), "HH:mm");
+              if (type === "arrangement") {
+                timeLabel = `${startTime}–${endTime}`;
+              } else if (type === "reminder") {
+                timeLabel = startTime;
+              } else if (type === "task") {
+                timeLabel = startTime;
+              }
+            } else {
+              timeLabel = "All day";
+            }
+
+            return (
+              <button
+                key={ev.id}
+                className="week-mobile-pill"
+                style={{
+                  borderColor: color,
+                  borderLeftColor: color,
+                  background: hexToRgba(color, 0.18),
+                }}
+                onClick={() => onEventClick?.(ev)}
+              >
+                <span className="pill-dot" style={{ background: color }} />
+                <div className="week-mobile-pill-main">
+                  <div className="week-mobile-pill-top">
+                    <span className="week-mobile-pill-icon">{icon}</span>
+                    {timeLabel && (
+                      <span className="week-mobile-pill-time">{timeLabel}</span>
+                    )}
+                  </div>
+                  <div className="week-mobile-pill-title">{ev.title}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------
+  // DESKTOP: hour grid with current time line
+  // -------------------------------------------------
+
   const positioned = useMemo(
     () => layoutDay(dayEvents, dayStart, dayEnd, pxPerMinute),
     [dayEvents, dayStart, dayEnd, pxPerMinute]
   );
+
+  const showNowLine =
+    isSameDay(now, cursor) && now >= dayStart && now <= dayEnd;
+
+  const nowTop = showNowLine
+    ? ((now.getTime() - dayStart.getTime()) / 60000) * pxPerMinute
+    : null;
 
   return (
     <div className="day-wrap">
       <div className="day-header">{format(cursor, "EEEE, d MMMM yyyy")}</div>
 
       <div className="day-body">
-        {/* Time labels column (reuse week styles) */}
         <div className="time-col">
           {HOURS.map((h, i) => (
             <div key={h} ref={i === 0 ? hourRef : null} className="hour">
@@ -203,9 +311,7 @@ export default function CalendarDay({
           ))}
         </div>
 
-        {/* Single day column */}
         <div className="day-col" style={{ position: "relative" }}>
-          {/* Clickable slots with enforced height matching the time column */}
           {HOURS.map((h) => {
             const slot = setMinutes(setHours(cursor, h), 0);
             return (
@@ -219,7 +325,6 @@ export default function CalendarDay({
             );
           })}
 
-          {/* All-day header strip */}
           {allDayEvents.length > 0 && (
             <div className="day-all-day-strip">
               {allDayEvents.map((e) => {
@@ -237,6 +342,7 @@ export default function CalendarDay({
                       display: "inline-block",
                       fontSize: 11,
                     }}
+                    onClick={() => onEventClick?.(e)}
                   >
                     {e.title}
                   </div>
@@ -245,7 +351,6 @@ export default function CalendarDay({
             </div>
           )}
 
-          {/* Timed events layer (includes holidays as 00:00→24:00 full-day blocks) */}
           <div
             className="overlay-events"
             style={{
@@ -255,6 +360,35 @@ export default function CalendarDay({
               zIndex: 1,
             }}
           >
+            {showNowLine && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: nowTop,
+                  left: 0,
+                  right: 0,
+                  height: 0,
+                  borderTop: "2px solid #4ade80",
+                  pointerEvents: "none",
+                  zIndex: 2,
+                }}
+              >
+                <div
+                  style={{
+                    position: "absolute",
+                    left: 2,
+                    transform: "translateY(-50%)",
+                    fontSize: 10,
+                    padding: "0 4px",
+                    borderRadius: 4,
+                    background: "rgba(0,0,0,0.7)",
+                  }}
+                >
+                  {format(now, "HH:mm")}
+                </div>
+              </div>
+            )}
+
             {positioned.map((p) => {
               const color = calById[p.event.calendarId]?.color || "#6c6cff";
 
@@ -267,7 +401,7 @@ export default function CalendarDay({
               let timeLabel = "";
               let titleLabel = p.event.title;
 
-              let icon = "•";
+              let icon = " ";
               if (type === "arrangement") icon = "📅";
               else if (type === "reminder") icon = "⏰";
               else if (type === "task") icon = "📝";
@@ -278,19 +412,18 @@ export default function CalendarDay({
                   toDate(p.event.end ?? p.event.start),
                   "HH:mm"
                 );
-
                 if (type === "arrangement") {
                   timeLabel = `${startTime}–${endTime}`;
                 } else if (type === "reminder") {
                   timeLabel = startTime;
                 } else if (type === "task") {
-                  timeLabel = "";
+                  timeLabel = startTime;
                 }
               } else {
                 timeLabel = "";
               }
 
-              const pillBg = `${color}22`;
+              const pillBg = hexToRgba(color, 0.18);
 
               return (
                 <div
@@ -317,7 +450,7 @@ export default function CalendarDay({
                       borderLeftColor: color,
                       background: pillBg,
                       display: "flex",
-                      alignItems: "start",
+                      alignItems: "flex-start",
                       gap: 6,
                       borderRadius: 5,
                       border: "1px solid " + color,
@@ -341,8 +474,9 @@ export default function CalendarDay({
                     <span
                       className="pill-title"
                       style={{
-                        textOverflow: "ellipsis",
+                        whiteSpace: "normal",
                         overflow: "hidden",
+                        textOverflow: "ellipsis",
                         flex: 1,
                       }}
                     >

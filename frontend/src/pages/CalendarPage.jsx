@@ -35,6 +35,7 @@ export default function CalendarPage() {
   const [selectedDay, setSelectedDay] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
   const [showHolidays, setShowHolidays] = useState(true);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const range = useMemo(() => {
     if (view === "week") {
@@ -65,19 +66,7 @@ export default function CalendarPage() {
     calendarIds: activeId ? [activeId] : [],
   });
 
-  // Filter holiday events to current visible range (their start/end are YYYY-MM-DD all-day)
-  const holidayEventsInRange = useMemo(() => {
-    return holidayEvents.filter((h) => {
-      const d = parseISO(h.start); // YYYY-MM-DD -> Date at 00:00
-      return isWithinInterval(d, {
-        start: startOfDay(range.start),
-        end: endOfDay(range.end),
-      });
-    });
-  }, [holidayEvents, range.start, range.end]);
-
   const events = useMemo(() => {
-    // filter holiday events by visible range
     const holidayEventsInRange = holidayEvents.filter((h) => {
       const d = parseISO(h.start); // YYYY-MM-DD -> Date at 00:00
       return isWithinInterval(d, {
@@ -129,6 +118,7 @@ export default function CalendarPage() {
         : subMonths(d, 1)
     );
   }
+
   function goNext() {
     setCursor((d) =>
       view === "day"
@@ -140,7 +130,6 @@ export default function CalendarPage() {
   }
 
   function handleCreateEvent() {
-    // open event modal for the current cursor day
     const base = cursor || new Date();
     const dayStart = startOfDay(base);
     setSelectedDay(dayStart);
@@ -156,12 +145,17 @@ export default function CalendarPage() {
       <SidebarCalendars
         calendars={calendars} // only real calendars; Sidebar adds holidays itself
         activeCalendarId={activeId}
-        onSelectCalendar={selectCalendar}
+        onSelectCalendar={(id) => {
+          selectCalendar(id);
+          setMobileSidebarOpen(false);
+        }}
         showHolidays={showHolidays}
         onToggleHolidays={setShowHolidays}
         onCreate={createCalendar}
         onUpdate={updateCalendar}
         onDelete={deleteCalendar}
+        isMobileOpen={mobileSidebarOpen}
+        onCloseMobile={() => setMobileSidebarOpen(false)}
       />
 
       <main className="main">
@@ -172,7 +166,8 @@ export default function CalendarPage() {
           onPrev={goPrev}
           onNext={goNext}
           onToday={() => setCursor(new Date())}
-          onCreateEvent={handleCreateEvent} // ⬅ here
+          onCreateEvent={handleCreateEvent}
+          onOpenSidebar={() => setMobileSidebarOpen(true)}
         />
 
         {view === "month" && (
@@ -225,6 +220,11 @@ export default function CalendarPage() {
             }}
           />
         )}
+
+        {/* Floating add button for mobile (hidden via CSS on desktop) */}
+        <button className="fab-add" onClick={handleCreateEvent}>
+          +
+        </button>
       </main>
 
       {(selectedDay || editingEvent) && (
